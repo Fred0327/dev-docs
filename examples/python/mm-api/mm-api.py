@@ -6,9 +6,7 @@ import time
 import urllib
 import hashlib
 import hmac
-from web3 import Account
-from zklink_sdk import ZkLinkLibrary, ZkLinkSigner
-from zklink_sdk.types import Order, Token
+import zklink_sdk as sdk
 
 domain_url = "http://domain_url"
 eth_priv_key = ""
@@ -98,27 +96,26 @@ def place_order(acct_id, product, side, time_in_force, price, size,
     assert side in ("BUY", "SELL")
     assert time_in_force in ("GTC", "IOC", "FOK", "GTX")
 
-    account = Account.from_key(eth_priv_key)
-    zksigner = ZkLinkSigner.from_account(account, ZkLinkLibrary())
-    pubkey_hex = zksigner.public_key.hex()
+    zksigner = sdk.ZkLinkSigner.new_from_hex_eth_signer(eth_priv_key)
 
-    order = Order(
-        account_id=acct_id,  # from /mm/api/self
-        price=int(price * (10 ** 18)),
-        amount=int(size * (10 ** 18)),
+    order = sdk.Order(
+        account_id=acct_id,
         sub_account_id=1,
-        slot=slot,
+        slot_id=slot,
         nonce=nonce,
-        base_token=Token(id=product.get('l2baseCurrencyId'), chain_id=0, address='', symbol='', decimals=18),
-        # from /mm/api/products
-        quote_token=Token(id=product.get('l2quoteCurrencyId'), chain_id=0, address='', symbol='', decimals=18),
-        # from /mm/api/products
-        is_sell=0 if side == "BUY" else 1,
-        taker_fee_ratio=taker_fee_ratio,
-        maker_fee_ratio=maker_fee_ratio
+        base_token_id=product.get('l2baseCurrencyId'),
+        quote_token_id=product.get('l2quoteCurrencyId'),
+        amount=str(int(price * (10 ** 18))),
+        price=str(int(size * (10 ** 18))),
+        is_sell=side == "BUY",
+        has_subsidy=False,
+        maker_fee_rate=maker_fee_ratio,
+        taker_fee_rate=taker_fee_ratio,
+        signature=None,
     )
+    signed_order = order.create_signed_order(zksigner)
+    order_signature = signed_order.get_signature();
 
-    order_signature_hex = zksigner.sign_order(order).signature
     args = {
         "timestamp": int(time.time()),
         "symbol": product.get('id'),
@@ -131,8 +128,8 @@ def place_order(acct_id, product, side, time_in_force, price, size,
         "makerFeeRatio": maker_fee_ratio,
         "slot": slot,
         "nonce": nonce,
-        "userPubkey": pubkey_hex[2:] if pubkey_hex[0:2] == "0x" else pubkey_hex,
-        "orderSignature": order_signature_hex[2:] if order_signature_hex[0:2] == "0x" else order_signature_hex
+        "userPubkey": order_signature.pub_key,
+        "orderSignature": order_signature.signature,
     }
     if len(client_oid) > 0:
         args["clientOid"] = client_oid
