@@ -107,7 +107,7 @@ def place_order(account_id, product, side, time_in_force, price, size,
         quote_token_id=product.get('l2quoteCurrencyId'),
         amount=str(int(size * (10 ** 18))),
         price=str(int(price * (10 ** 18))),
-        is_sell=side == "BUY",
+        is_sell=side == "SELL",
         has_subsidy=False,
         maker_fee_rate=maker_fee_ratio,
         taker_fee_rate=taker_fee_ratio,
@@ -116,6 +116,7 @@ def place_order(account_id, product, side, time_in_force, price, size,
     signed_order = order.create_signed_order(zksigner)
     print(signed_order.is_valid())
     print(signed_order.is_signature_valid())
+    print(signed_order.json_str())
     order_signature = signed_order.get_signature();
 
     args = {
@@ -133,6 +134,7 @@ def place_order(account_id, product, side, time_in_force, price, size,
         "userPubkey": order_signature.pub_key,
         "orderSignature": order_signature.signature,
     }
+
     if len(client_oid) > 0:
         args["clientOid"] = client_oid
 
